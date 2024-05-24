@@ -2,28 +2,8 @@ import math
 from schemas_navico import sl_file_header, sl2_frame, ChannelType
 import os
 
-def lon2x(lon):
-    # Convert from degrees to radians
-    lon_radians = math.radians(lon)
-
-    # Apply the inverse formula from x2lon
-    x = lon_radians * 6356752.3142 * (1 / math.pi)
-
-    return x
-
-def lat2y(lat):
-    # Convert latitude to radians
-    rad_lat = math.radians(lat)
-
-    # WGS-84 equatorial radius
-    a = 6378137.0  # meters
-
-    # WGS-84 eccentricity squared
-    e2 = 0.0066934213 
-
-    # Calculate y (latitude in meters)
-    y = a * math.log(math.tan(math.pi/4 + rad_lat / 2) * math.sqrt((1 - e2) / (1 + e2 * math.sin(rad_lat)**2)))
-    return y
+EARTH_RADIUS = 6356752.3142
+RAD_CONVERSION = 180 / math.pi
 
 def encode_sl2(packet, filename):
     # File header
@@ -51,9 +31,16 @@ def encode_sl2(packet, filename):
     frame_size = len(sounded_data) + 144
     channel_type = ChannelType.SidescanComposite
     packet_size = len(sounded_data)
+    
+    frame_index = 0,
+    upper_limit = 0,
+    lower_limit = 1000,
+
     water_depth_feet = int(packet['depth'].strip()) # Depth
-    x = int(lon2x(packet['lon']))                        # x from longitude
-    y = int(lat2y(packet['lat']))                        # y from latitude
+    easting = packet['lon'] * EARTH_RADIUS / RAD_CONVERSION
+    nothing = EARTH_RADIUS * math.log(math.tan((packet['lat'] / RAD_CONVERSION / 2) + math.pi / 4))
+
+    altitude_ft = packet['alt']
 
     frame_data = {
         "frame_offset": frame_offset,
@@ -63,9 +50,9 @@ def encode_sl2(packet, filename):
         "channel_type": channel_type,
         "packet_size": packet_size,
 
-        "frame_index": 0,
-        "upper_limit_feet": 0,
-        "lower_limit_feet": 0,
+        "frame_index": frame_index,
+        "upper_limit_feet": upper_limit,
+        "lower_limit_feet": lower_limit,
 
         "_pad48": 0,
         "frequency": 0,
@@ -78,11 +65,11 @@ def encode_sl2(packet, filename):
 
         "gps_speed_knots": 0,
         "water_temperature_c": 0,
-        "easting": x,
-        "northing": y,
+        "easting": int(easting),
+        "northing": int(nothing),
         "water_speed_knots": 0,
         "course_over_ground_radians": 0,
-        "altitude_ft": 0,
+        "altitude_ft": altitude_ft,
         "heading_radians": 0,
 
         "flags": 0,
