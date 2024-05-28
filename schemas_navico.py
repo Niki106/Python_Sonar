@@ -66,7 +66,7 @@ sl2_frame = c.Struct(
     creation_date_time=c.Default(c.Int32sl, -1),
     water_depth_feet=c.Float32l,
     keel_depth_feet=c.Float32l,
-    # 68
+    # 72
     _pad2=c.Padding(100 - 72),
     # 100
     gps_speed_knots=c.Float32l,
