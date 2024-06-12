@@ -4,41 +4,44 @@ import os
 
 EARTH_RADIUS = 6356752.3142
 RAD_CONVERSION = 180 / math.pi
+FILE_HEADER_SIZE = 8
+FRAME_HEADER_SIZE = 144
 
 timestamp = 0
 prev_frame_size = 0
+prev_frame_offset = FILE_HEADER_SIZE
 
 def encode_sl2_frame(packet, index):
     global timestamp
     global prev_frame_size
+    global prev_frame_offset
 
     # Frame data
     data_string = packet['sample_data']
     hex_values = [value.strip() for value in data_string.split(',')]
     byte_array = bytearray([int(value, 16) for value in hex_values])
-    sounded_data = byte_array
+    sound_data = byte_array
 
     # Frame
-    frame_size = len(sounded_data) + 144
-    frame_offset = 8 + index * frame_size
-    channel_type = ChannelType.SidescanComposite
-    packet_size = len(sounded_data)
+    packet_size = len(sound_data)       # 1400, 2800, 3072, 2880
+    frame_size = FRAME_HEADER_SIZE + packet_size
+    frame_offset = prev_frame_offset + prev_frame_size
+
+    channel_type = ChannelType.Primary   # ChannelType.DownScan
     
     frame_index = index
-    upper_limit = 0
-    lower_limit = 5.0
+    upper_limit = 0 #if (index % 2 == 0) else -5
+    lower_limit = 5
 
-    water_depth_feet = 3.5 # int(packet['depth'].strip()) # Depth
+    water_depth_feet = int(packet['depth'].strip()) * 0.0328084
     easting = packet['lon'] * EARTH_RADIUS / RAD_CONVERSION
     nothing = EARTH_RADIUS * math.log(math.tan((packet['lat'] / RAD_CONVERSION / 2) + math.pi / 4))
+    altitude_ft = packet['alt']
 
-    altitude_ft = 0
     time_offset = int(packet['timestamp']) - timestamp
 
     frame_data = {
         "frame_offset": frame_offset,
-        "last_frame_offset_down_scan": frame_offset,
-        
         "frame_size": frame_size,
         "previous_frame_size": prev_frame_size,
         "channel_type": channel_type,
@@ -71,11 +74,13 @@ def encode_sl2_frame(packet, index):
         "_pad3": 0,
 
         "time_offset": time_offset,
-        "sounded_data": sounded_data,
+        "sounded_data": sound_data,
     }
 
     frame = sl2_frame.build(frame_data)
 
+    # Store for next calculation
+    prev_frame_offset = frame_offset
     prev_frame_size = frame_size
 
     return frame
@@ -103,7 +108,6 @@ def compose_sl2_file(packets, filename):
     i = 0
     timestamp = int(packets[0]['timestamp'])
     for packet in packets:
-        if not 'lon' in packet: continue
         frame = encode_sl2_frame(packet, i)
         blocks.append(frame)
         i = i + 1
@@ -119,7 +123,7 @@ def compose_sl2_file(packets, filename):
 
 if __name__ == '__main__':
     # Open the packets file
-    with open("packets.json", "r") as f:
+    with open("packets2.json", "r") as f:
         data_string = f.read()
     data_string = data_string.replace("'", '"')
     packets = eval(data_string)
